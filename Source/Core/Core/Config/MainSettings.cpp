@@ -648,11 +648,42 @@ const char* GetDirectoryForRegion(DiscIO::Region region, RegionDirectoryStyle st
 
 std::string GetBootROMPath(const std::string& region_directory)
 {
-  const std::string path =
-      File::GetUserPath(D_GCUSER_IDX) + DIR_SEP + region_directory + DIR_SEP GC_IPL;
-  if (!File::Exists(path))
-    return File::GetSysDirectory() + GC_SYS_DIR + DIR_SEP + region_directory + DIR_SEP GC_IPL;
-  return path;
+  // The NTSC-J and NTSC-U IPLs are 1:1 identical (they are used between both regions), so it being
+  // in either the USA or JAP folder is supported for both regions.
+  const std::string user_base = File::GetUserPath(D_GCUSER_IDX);
+  const std::string sys_base = File::GetSysDirectory() + GC_SYS_DIR;
+
+  const auto BuildPath = [](const std::string& base, const std::string& region) {
+    return base + DIR_SEP + region + DIR_SEP GC_IPL;
+  };
+
+  auto TryPaths = [&](const std::string& region) -> std::optional<std::string> {
+    std::string path = BuildPath(user_base, region);
+    if (File::Exists(path))
+      return path;
+
+    path = BuildPath(sys_base, region);
+    if (File::Exists(path))
+      return path;
+
+    return std::nullopt;
+  };
+
+  if (auto result = TryPaths(region_directory))
+    return *result;
+
+  if (region_directory == USA_DIR)
+  {
+    if (auto result = TryPaths(JAP_DIR))
+      return *result;
+  }
+  else if (region_directory == JAP_DIR)
+  {
+    if (auto result = TryPaths(USA_DIR))
+      return *result;
+  }
+
+  return BuildPath(user_base, region_directory);
 }
 
 std::string GetMemcardPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region,
